@@ -1,0 +1,131 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\BantinXuatBan;
+use App\Models\LoaiTin;
+use Illuminate\Http\Request;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\Shared\Html;
+use Illuminate\Support\Facades\Response;
+use Carbon\Carbon;
+
+class BantinXuatBanController extends Controller
+{
+    public function index()
+    {
+        $bantins = BantinXuatBan::with('loaiTin')->orderBy('NgayXuatBan', 'desc')->get();
+        $loaitin = LoaiTin::all();
+        return view('welcome', compact('bantins', 'loaitin')); 
+    }
+    public function show($MaBT_XB)
+    {
+        $bantins = BantinXuatBan::with('comments.user', 'loaiTin')->findOrFail($MaBT_XB);
+        $bantins->LuotXem++;
+        $bantins->save();
+        $comments = $bantins->comments;
+        $loaitin = LoaiTin::all(); 
+        $relatedBantins = BantinXuatBan::with('loaiTin')
+            ->where('LoaiBT_XB', $bantins->LoaiBT_XB)
+            ->where('MaBT_XB', '!=', $bantins->MaBT_XB)
+            ->orderBy('NgayXuatBan', 'desc')
+            ->take(3)
+            ->get();
+        if ($relatedBantins->count() < 3) {
+            $additionalBantins = BantinXuatBan::with('loaiTin')
+                ->where('MaBT_XB', '!=', $bantins->MaBT_XB)
+                ->orderBy('NgayXuatBan', 'desc')
+                ->take(3 - $relatedBantins->count())
+                ->get();
+            $relatedBantins = $relatedBantins->merge($additionalBantins);
+        }
+        return view('bantin.show', compact('bantins', 'comments', 'loaitin', 'relatedBantins')); // Truyền biến $relatedBantins vào view
+    }
+    public function theoDoiXB()
+    {
+        $bantins = BantinXuatBan::with('loaiTin')->orderBy('NgayXuatBan', 'desc')->get();
+        return view('quanly.kiemduyet.theodoi', compact('bantins'));
+    }
+    public function xuatBanWord($MaBT_XB)
+    {
+        set_time_limit(300);
+        $bantin = BantinXuatBan::with('loaiTin')->findOrFail($MaBT_XB);
+        $html_content = $this->xuLyAnh($bantin->NoiDungBT_XB);
+        $phpWord = new PhpWord();
+        $section = $phpWord->addSection();
+        $section->addTitle(htmlspecialchars($bantin->TieuDeBT_XB), 1);
+        $ngayXuatBanFormatted = Carbon::parse($bantin->NgayXuatBan)->format('d/m/Y');
+        $section->addText('Ngày xuất bản: ' . htmlspecialchars($ngayXuatBanFormatted));
+        if ($bantin->loaiTin) {
+            $section->addText('Loại tin: ' . htmlspecialchars($bantin->loaiTin->TenLT));
+        }
+        if ($bantin->AnhDaiDien_XB) {
+            $imagePath = public_path($bantin->AnhDaiDien_XB);
+            if (file_exists($imagePath) && is_readable($imagePath)) {
+                [$rongGoc, $daiGoc] = getimagesize($imagePath);
+                $rongMoi = 500;
+                $daiMoi = ($daiGoc / $rongGoc) * $rongMoi;
+                $section->addImage($imagePath, [
+                    'width' => $rongMoi,
+                    'height' => $daiMoi,
+                    'wrappingStyle' => 'inline',
+                ]);
+            }
+        }
+        Html::addHtml($section, $html_content);
+        $section->addTextBreak(2);
+        $section->addTitle('Thông tin tác giả', 2);
+        if ($bantin->TenPhongVien_XB) {
+            $section->addText('Phóng viên: ' . htmlspecialchars($bantin->TenPhongVien_XB));
+        }
+        if ($bantin->TenBienTapVien_XB) {
+            $section->addText('Biên tập viên: ' . htmlspecialchars($bantin->TenBienTapVien_XB));
+        }
+        if ($bantin->TenKiemDuyetVien) {
+            $section->addText('Kiểm duyệt viên: ' . htmlspecialchars($bantin->TenKiemDuyetVien));
+        }
+        $fileName = 'bantin_' . $bantin->MaBT_XB . '.docx';
+        $temp_file = tempnam(sys_get_temp_dir(), 'bantin_') . '.docx';
+        $phpWord->save($temp_file, 'Word2007');
+        if (file_exists($temp_file)) {
+            return Response::download($temp_file, $fileName)->deleteFileAfterSend(true);
+        } else {
+            return response()->json(['error' => 'Không thể tạo file'], 500);
+        }
+    }
+    private function xuLyAnh($html)
+    {
+        return preg_replace_callback(
+            '/<img[^>]+src=["\'](.*?)["\'][^>]*>/is',
+            function ($matches) {
+                $imageUrl = $matches[1];
+                $localPath = public_path(parse_url($imageUrl, PHP_URL_PATH));
+                if (file_exists($localPath) && is_readable($localPath)) {
+                    [$rongGoc, $daiGoc] = getimagesize($localPath);
+                    $rongMoi = 500;
+                    $daiMoi = ($daiGoc / $rongGoc) * $rongMoi;
+                    return '<img src="' . $localPath . '" width="' . $rongMoi . '" height="' . $daiMoi . '" />';
+                } else {
+                    return '<p>Không thể tải ảnh.</p>';
+                }
+            },
+            $html
+        );
+    }
+    public function showByLoaiTin($MaLT)
+    {
+        $bantins = BantinXuatBan::with('loaiTin')
+            ->where('LoaiBT_XB', $MaLT)
+            ->orderBy('NgayXuatBan', 'desc')
+            ->get();
+
+        $loaitin = LoaiTin::all();
+        return view('bantin.index', compact('bantins', 'loaitin'));
+    }
+    public function search(Request $request)
+    {
+        $query = $request->input('q');
+        $bantins = BantinXuatBan::where('TieuDeBT_XB', 'LIKE', "%{$query}%")->get(['MaBT_XB', 'TieuDeBT_XB']);
+        return response()->json($bantins);
+    }
+}

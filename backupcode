@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danh sách bài viết</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .news-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.1), 0px 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-white-100 p-6">
+    @include('layouts.header')
+    
+    <div class="container mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                @if(Auth::check() && Auth::user()->Quyen == 'Độc Giả')
+                <div class="relative inline-block text-left">
+                    <button id="dropdownButton" class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none">
+                        Xin chào, <span class="font-semibold">{{ Auth::user()->TenDangNhap }}</span>!
+                        <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M5.293 9.707a1 1 0 010-1.414L9.586 4H4a1 1 0 100 2h5.586l-4.293 4.293a1 1 0 001.414 1.414l5-5a1 1 0 00-1.414-1.414l-5 5z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                    <div id="dropdownMenu" class="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 hidden">
+                        <div class="py-1" role="menu" aria-orientation="vertical" aria-labelledby="dropdownButton">
+                            <a href="{{ route('account.edit') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Cập Nhật Tài Khoản</a>
+                            <form action="{{ route('logout') }}" method="POST" role="none">
+                                @csrf
+                                <button type="submit" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Đăng Xuất</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>                
+                @endif
+            </div>
+        </div>
+        @if($bantins->isNotEmpty())
+            <div class="mb-12">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">Bản Tin Nổi Bật</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="md:col-span-2">
+                        @foreach($bantins->sortByDesc('LuotXem')->take(1) as $bantin)
+                            <a href="{{ route('bantin.show', ['MaBT_XB' => $bantin->MaBT_XB]) }}" class="block p-6 shadow-md hover:shadow-lg transition-shadow duration-300 transform hover:-translate-y-1 news-card">
+                                <h2 class="text-2xl font-bold mb-3">{{ $bantin->TieuDeBT_XB }}</h2>
+                                <p class="text-white mb-4">
+                                    <span class="font-bold">{{ $bantin->loaiTin ? $bantin->loaiTin->TenLT : 'Chưa có loại tin' }}</span> - 
+                                    <span>{{ \Carbon\Carbon::parse($bantin->NgayXuatBan)->format('d/m/Y H:i') }}</span>
+                                </p>
+                                @if($bantin->AnhDaiDien_XB)
+                                    <img src="{{ asset($bantin->AnhDaiDien_XB) }}" alt="Ảnh đại diện" class="w-full h-48 object-cover mb-4">
+                                @endif
+                                <div class="prose line-clamp-3">
+                                    {!! preg_match('/<h2>(.*?)<\/h2>/', $bantin->NoiDungBT_XB, $matches) ? $matches[1] : strip_tags(\Illuminate\Support\Str::limit($bantin->NoiDungBT_XB, 150)) !!} 
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
+                    <div class="md:col-span-1">
+                        @foreach($bantins->sortByDesc('LuotXem')->skip(1)->take(1) as $bantin)
+                            <a href="{{ route('bantin.show', ['MaBT_XB' => $bantin->MaBT_XB]) }}" class="block p-4 shadow-md hover:shadow-lg transition-shadow duration-300 transform hover:-translate-y-1 news-card">
+                                <h2 class="text-lg font-semibold mb-2 text-gray-800">{{ $bantin->TieuDeBT_XB }}</h2>
+                                <p class="text-gray-600 mb-2">
+                                    <span class="font-bold text-gray-700">{{ $bantin->loaiTin ? $bantin->loaiTin->TenLT : 'Chưa có loại tin' }}</span> - 
+                                    <span>{{ \Carbon\Carbon::parse($bantin->NgayXuatBan)->format('d/m/Y H:i') }}</span>
+                                </p>
+                                @if($bantin->AnhDaiDien_XB)
+                                    <img src="{{ asset($bantin->AnhDaiDien_XB) }}" alt="Ảnh đại diện" class="w-full h-32 object-cover mb-2">
+                                @endif
+                                <div class="prose line-clamp-2 text-gray-700 text-sm">
+                                    {!! preg_match('/<h2>(.*?)<\/h2>/', $bantin->NoiDungBT_XB, $matches) ? $matches[1] : strip_tags(\Illuminate\Support\Str::limit($bantin->NoiDungBT_XB, 100)) !!}
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Bản Tin Tổng Hợp</h2>
+            <div class="grid grid-cols-1 gap-4">
+                @foreach($bantins as $bantin)
+                    <a href="{{ route('bantin.show', ['MaBT_XB' => $bantin->MaBT_XB]) }}" class="block bg-white p-4 shadow-md hover:shadow-lg transition-shadow duration-300 transform hover:-translate-y-1 news-card">
+                        <h2 class="text-lg font-semibold mb-2 text-gray-800">{{ $bantin->TieuDeBT_XB }}</h2>
+                        <p class="text-gray-600 mb-2 text-sm">
+                            <span class="font-bold text-gray-700">{{ $bantin->loaiTin ? $bantin->loaiTin->TenLT : 'Chưa có loại tin' }}</span> - 
+                            <span>{{ \Carbon\Carbon::parse($bantin->NgayXuatBan)->format('d/m/Y H:i') }}</span>
+                        </p>
+                        @if($bantin->AnhDaiDien_XB)
+                            <img src="{{ asset($bantin->AnhDaiDien_XB) }}" alt="Ảnh đại diện" class="w-full h-32 object-cover mb-2">
+                        @endif
+                        <div class="prose line-clamp-2 text-gray-700 text-sm">
+                            {!! preg_match('/<h2>(.*?)<\/h2>/', $bantin->NoiDungBT_XB, $matches) ? $matches[1] : strip_tags(\Illuminate\Support\Str::limit($bantin->NoiDungBT_XB, 100)) !!}
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+        @else
+            <p class="text-gray-600 text-center mt-4">Chưa có bài viết nào.</p>
+        @endif
+    </div>
+
+    @include('layouts.footer')
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var dropdownButton = document.getElementById('dropdownButton');
+            var dropdownMenu = document.getElementById('dropdownMenu');
+            
+            dropdownButton.addEventListener('click', function () {
+                dropdownMenu.classList.toggle('hidden');
+            });
+            window.addEventListener('click', function (e) {
+                if (!dropdownButton.contains(e.target) && !dropdownMenu.contains(e.target)) {
+                    dropdownMenu.classList.add('hidden');
+                }
+            });
+        });
+    </script>    
+</body>
+</html>
